@@ -1,0 +1,25 @@
+{
+    "localservice":{
+        "name": "svc-2",
+        "host": "http://localhost", 
+        "port": 8082
+    },
+    "service1":{
+        "name": "svc-1",
+        "host": "http://localhost", 
+        "port": 8081
+    },
+    "service2":{
+        "name": "svc-2",
+        "host": "http://localhost", 
+        "port": 8082
+    },
+    "service3":{
+        "name": "svc-3",
+        "host": "http://localhost", 
+        "port": 8083
+    },
+    "zipkin":{
+        "endpoint": "http://localhost:9411/api/v2/spans"
+    }
+}
