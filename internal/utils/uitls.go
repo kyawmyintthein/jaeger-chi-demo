@@ -6,7 +6,7 @@ import (
 
 const (
 	min = 1
-	max = 50
+	max = 5
 )
 
 func GetRandomNumber() int {

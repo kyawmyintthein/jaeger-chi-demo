@@ -7,40 +7,33 @@ import (
 	"net/http"
 	"time"
 
-	zipkin "github.com/openzipkin/zipkin-go"
+	"github.com/opentracing/opentracing-go"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
-	"github.com/kyawmyintthein/zipkin-chi-demo/config"
-	"github.com/kyawmyintthein/zipkin-chi-demo/internal/utils"
-	"github.com/kyawmyintthein/zipkin-chi-demo/internal/zipkinsvc"
-	"github.com/kyawmyintthein/zipkin-chi-demo/router"
-	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
+	"github.com/kyawmyintthein/jaeger-chi-demo/config"
+	"github.com/kyawmyintthein/jaeger-chi-demo/internal/jaegersvc"
+	"github.com/kyawmyintthein/jaeger-chi-demo/internal/utils"
+	"github.com/kyawmyintthein/jaeger-chi-demo/router"
 )
 
 func main() {
 	var configFilePath string
 	var serverPort string
 	flag.StringVar(&configFilePath, "config", "config.json", "absolute path to the configuration file")
-	flag.StringVar(&serverPort, "server_port", "8083", "port on which server runs")
+	flag.StringVar(&serverPort, "server_port", "3033", "port on which server runs")
 	flag.Parse()
 
 	generalConfig := getConfig(configFilePath)
-	tracer, err := zipkinsvc.NewTracer(generalConfig)
-
+	tracer, err := jaegersvc.NewTracer(generalConfig)
 	if err != nil {
 		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
 	}
 
-	zipkinClient, err := zipkinsvc.NewClient(tracer)
-	if err != nil {
-		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
-	}
-
-	router := router.GetRouter(tracer)
-	router.Post("/bar", Post(zipkinClient, generalConfig))
-
-	logrus.Infoln(fmt.Sprintf("############################## %s Server Started ##############################", generalConfig.LocalService.Name))
+	router := router.NewServeMux(tracer)
+	router.Handle("/bar", http.HandlerFunc(Bar(generalConfig, tracer)))
+	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
 	http.ListenAndServe(":"+serverPort, router)
 }
 
@@ -57,14 +50,14 @@ func getConfig(filepath string) *config.GeneralConfig {
 	return generalConfig
 }
 
-func Post(client *zipkinhttp.Client, generalConfig *config.GeneralConfig) http.HandlerFunc {
+func Bar(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("get called with method: %s\n", r.Method)
-		// retrieve span from context (created by server middleware)
-		span := zipkin.SpanFromContext(r.Context())
-		span.Tag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now().String())
+
+		span := opentracing.SpanFromContext(r.Context())
+		span.SetTag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now())
 		doSomething()
-		span.Annotate(time.Now(), fmt.Sprintf("%s-done", generalConfig.LocalService.Name))
+		span.SetTag(fmt.Sprintf("%s-done", generalConfig.LocalService.Name), time.Now())
 	}
 }
 

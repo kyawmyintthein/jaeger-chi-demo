@@ -2,46 +2,42 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 
-	zipkin "github.com/openzipkin/zipkin-go"
+	"github.com/opentracing/opentracing-go"
+
+	"github.com/opentracing-contrib/go-stdlib/nethttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
-	"github.com/kyawmyintthein/zipkin-chi-demo/config"
-	"github.com/kyawmyintthein/zipkin-chi-demo/internal/utils"
-	"github.com/kyawmyintthein/zipkin-chi-demo/internal/zipkinsvc"
-	"github.com/kyawmyintthein/zipkin-chi-demo/router"
-	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
+	"github.com/kyawmyintthein/jaeger-chi-demo/config"
+	"github.com/kyawmyintthein/jaeger-chi-demo/internal/jaegersvc"
+	"github.com/kyawmyintthein/jaeger-chi-demo/internal/utils"
+	"github.com/kyawmyintthein/jaeger-chi-demo/router"
 )
 
 func main() {
 	var configFilePath string
 	var serverPort string
 	flag.StringVar(&configFilePath, "config", "config.json", "absolute path to the configuration file")
-	flag.StringVar(&serverPort, "server_port", "8082", "port on which server runs")
+	flag.StringVar(&serverPort, "server_port", "3032", "port on which server runs")
 	flag.Parse()
 
 	generalConfig := getConfig(configFilePath)
-	tracer, err := zipkinsvc.NewTracer(generalConfig)
-
+	tracer, err := jaegersvc.NewTracer(generalConfig)
 	if err != nil {
 		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
 	}
 
-	zipkinClient, err := zipkinsvc.NewClient(tracer)
-	if err != nil {
-		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
-	}
-
-	router := router.GetRouter(tracer)
-	router.Post("/foo", Post(zipkinClient, generalConfig))
-
-	logrus.Infoln(fmt.Sprintf("############################## %s Server Started ##############################", generalConfig.LocalService.Name))
+	router := router.NewServeMux(tracer)
+	router.Handle("/foo", http.HandlerFunc(Foo(generalConfig, tracer)))
+	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
 	http.ListenAndServe(":"+serverPort, router)
 }
 
@@ -58,20 +54,22 @@ func getConfig(filepath string) *config.GeneralConfig {
 	return generalConfig
 }
 
-func Post(client *zipkinhttp.Client, generalConfig *config.GeneralConfig) http.HandlerFunc {
+func Foo(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("get called with method: %s\n", r.Method)
 
-		// retrieve span from context (created by server middleware)
-		span := zipkin.SpanFromContext(r.Context())
-		span.Tag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now().String())
+		span := opentracing.SpanFromContext(r.Context())
+		span.SetTag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now())
 		doSomething()
-		span.Annotate(time.Now(), fmt.Sprintf("%s-done", generalConfig.LocalService.Name))
-		err := callService3(r.Context(), generalConfig, client)
+		span.SetTag(fmt.Sprintf("%s-done", generalConfig.LocalService.Name), time.Now())
+		err := callService3(r.Context(), generalConfig, tracer)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		w.WriteHeader(http.StatusOK)
+
 	}
 }
 
@@ -79,19 +77,33 @@ func doSomething() {
 	time.Sleep(time.Duration(utils.GetRandomNumber()) * time.Millisecond)
 }
 
-func callService3(ctx context.Context, generalConfig *config.GeneralConfig, client *zipkinhttp.Client) error {
-	service2Endpoint := fmt.Sprintf("%s:%d", generalConfig.Service3.Host, generalConfig.Service3.Port)
-	url := fmt.Sprintf("%s/%s", service2Endpoint, "bar")
-	newRequest, err := http.NewRequest("POST", url, nil)
+func callService3(ctx context.Context, generalConfig *config.GeneralConfig, tracer opentracing.Tracer) error {
+	service3Endpoint := fmt.Sprintf("%s:%d", generalConfig.Service3.Host, generalConfig.Service3.Port)
+	url := fmt.Sprintf("%s/%s", service3Endpoint, "bar")
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	newRequest = newRequest.WithContext(ctx)
-	res, err := client.DoWithAppSpan(newRequest, url)
-	if err != nil {
-		return err
-	}
-	res.Body.Close()
 
+	req = req.WithContext(ctx)
+	req, ht := nethttp.TraceRequest(tracer, req, nethttp.OperationName("svc3: "+service3Endpoint))
+	defer ht.Finish()
+
+	client := http.Client{Transport: &nethttp.Transport{}}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return errors.New(string(body))
+	}
+	//decoder := json.NewDecoder(res.Body)
 	return nil
 }

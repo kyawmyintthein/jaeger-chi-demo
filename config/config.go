@@ -11,7 +11,7 @@ type GeneralConfig struct {
 	Service1     Service
 	Service2     Service
 	Service3     Service
-	ZipKin       struct {
+	Jaeger       struct {
 		EndPoint string `json:"endpoint"`
-	} `json:"zipkin"`
+	}
 }
