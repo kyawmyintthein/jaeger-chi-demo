@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-
+	"github.com/go-chi/chi/middleware"
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
@@ -57,8 +58,17 @@ func getConfig(filepath string) *config.GeneralConfig {
 func Get(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("get called with method: %s\n", r.Method)
-
 		span := opentracing.SpanFromContext(r.Context())
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			span.SetTag("request_id", reqID)
+			log.Printf("request_id: %s\n", reqID)
+		}
+		span.SetBaggageItem("getBaggageItem", "BaggageItem")
+		span.LogKV("test")
+		span.LogFields(
+			olog.String("event", "svc-1:get called"),
+			olog.String("value", "test"),
+		)
 		span.SetTag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now())
 		doSomething()
 		span.SetTag(fmt.Sprintf("%s-done", generalConfig.LocalService.Name), time.Now())

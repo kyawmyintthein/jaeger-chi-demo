@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/middleware"
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
@@ -59,6 +60,10 @@ func Foo(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.Ha
 		log.Printf("get called with method: %s\n", r.Method)
 
 		span := opentracing.SpanFromContext(r.Context())
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			span.SetTag("request_id", reqID)
+			log.Printf("request_id: %s\n", reqID)
+		}
 		span.SetTag(fmt.Sprintf("%s-called", generalConfig.LocalService.Name), time.Now())
 		doSomething()
 		span.SetTag(fmt.Sprintf("%s-done", generalConfig.LocalService.Name), time.Now())
