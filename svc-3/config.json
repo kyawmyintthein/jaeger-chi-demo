@@ -1,21 +1,6 @@
 {
     "localservice":{
-        "name": "svc-3",
-        "host": "http://localhost", 
-        "port": 3033
-    },
-    "service1":{
-        "name": "svc-1",
-        "host": "http://localhost", 
-        "port": 3031
-    },
-    "service2":{
-        "name": "svc-2",
-        "host": "http://localhost", 
-        "port": 3032
-    },
-    "service3":{
-        "name": "svc-3",
+        "name": "svc-notification-service",
         "host": "http://localhost", 
         "port": 3033
     },
