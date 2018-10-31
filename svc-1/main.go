@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+
+	_ "net/http/pprof"
 
 	"github.com/kyawmyintthein/jaeger-chi-demo/config"
 	"github.com/kyawmyintthein/jaeger-chi-demo/internal/jaegersvc"
@@ -36,10 +39,16 @@ func main() {
 		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
 	}
 
-	router := router.NewServeMux(tracer)
-	router.Handle("/", http.HandlerFunc(Get(generalConfig, tracer)))
+	router := router.NewRouter(tracer)
+	router.Get("/users/{user_id}", Get(generalConfig, tracer))
 	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
-	http.ListenAndServe(":"+serverPort, router)
+
+	http.ListenAndServe(":"+serverPort, nethttp.Middleware(
+		tracer,
+		router,
+		nethttp.OperationNameFunc(func(r *http.Request) string {
+			return "request"
+		})))
 }
 
 func getConfig(filepath string) *config.GeneralConfig {
@@ -59,6 +68,12 @@ func Get(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("get called with method: %s\n", r.Method)
 		span := opentracing.SpanFromContext(r.Context())
+		userID := chi.URLParam(r, "user_id")
+		if userID != "" {
+			span.SetTag("user_id", userID)
+			log.Printf("user_id: %s\n", userID)
+		}
+
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			span.SetTag("request_id", reqID)
 			log.Printf("request_id: %s\n", reqID)

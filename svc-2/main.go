@@ -36,10 +36,16 @@ func main() {
 		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
 	}
 
-	router := router.NewServeMux(tracer)
-	router.Handle("/foo", http.HandlerFunc(Foo(generalConfig, tracer)))
+	router := router.NewRouter(tracer)
+	router.Get("/cms/{user_id}", Foo(generalConfig, tracer))
 	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
-	http.ListenAndServe(":"+serverPort, router)
+
+	http.ListenAndServe(":"+serverPort, nethttp.Middleware(
+		tracer,
+		router,
+		nethttp.OperationNameFunc(func(r *http.Request) string {
+			return "request"
+		})))
 }
 
 func getConfig(filepath string) *config.GeneralConfig {
