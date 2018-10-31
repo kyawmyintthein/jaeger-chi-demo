@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -39,7 +39,7 @@ func main() {
 		panic(fmt.Errorf("falied to init jaeger tracer : %v", err))
 	}
 
-	router := router.NewRouter(tracer)
+	router := router.NewRouter()
 	router.Post("/users/register", RegisterHandler(generalConfig, tracer))
 	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
 
@@ -69,30 +69,28 @@ func RegisterHandler(generalConfig *config.GeneralConfig, tracer opentracing.Tra
 		log.Printf("get called with method: %s\n", r.Method)
 
 		span := opentracing.SpanFromContext(r.Context())
+		fmt.Printf("%+v : \n", span)
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			span.SetTag("request_id", reqID)
 			log.Printf("request_id: %s\n", reqID)
 		}
-
-		span.LogFields(
-			olog.String("event", "user service: register called"),
-			olog.String("value", "test"),
-		)
 
 		var userReg UserRegisterRequestModel
 		err := json.NewDecoder(r.Body).Decode(&userReg)
 		defer r.Body.Close()
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			return 
+			return
 		}
-	
+
+		span.LogFields(
+			olog.String("event", "user service: register called"),
+			olog.Object("value", userReg),
+		)
 		log.Printf("request payload: %v+\n", userReg)
 		span.SetTag("external_id", userReg.ExternalId)
 		span.SetTag("email", userReg.Email)
 		span.SetTag("device_id", userReg.Device.DeviceId)
-
-		doSomething()
 
 		err = sendNotification(r.Context(), &userReg, generalConfig, tracer)
 		if err != nil {
@@ -122,7 +120,8 @@ func sendNotification(ctx context.Context, payload *UserRegisterRequestModel, ge
 	req = req.WithContext(ctx)
 	req, ht := nethttp.TraceRequest(tracer, req, nethttp.OperationName(fmt.Sprintf("%s:%s", generalConfig.Service3.Name, url)))
 	defer ht.Finish()
-
+	span := opentracing.SpanFromContext(req.Context())
+	span.SetBaggageItem("original_service", "svc-user-service")
 	client := http.Client{Transport: &nethttp.Transport{}}
 	res, err := client.Do(req)
 	if err != nil {

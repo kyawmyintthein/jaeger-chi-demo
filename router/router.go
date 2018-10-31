@@ -13,7 +13,7 @@ import (
 )
 
 // NewServeMux creates a new TracedServeMux.
-func NewRouter(tracer opentracing.Tracer) *chi.Mux {
+func NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)

@@ -13,7 +13,6 @@ import (
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 
-
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
@@ -36,7 +35,7 @@ func main() {
 		panic(fmt.Errorf("falied to init jaeger tracer : %v", err))
 	}
 
-	router := router.NewRouter(tracer)
+	router := router.NewRouter()
 	router.Post("/notification", NotificationHandler(generalConfig, tracer))
 	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
 
@@ -46,6 +45,7 @@ func main() {
 		nethttp.OperationNameFunc(func(r *http.Request) string {
 			return r.URL.String()
 		})))
+	//http.ListenAndServe(":"+serverPort, router)
 }
 
 func getConfig(filepath string) *config.GeneralConfig {
@@ -68,26 +68,32 @@ func NotificationHandler(generalConfig *config.GeneralConfig, tracer opentracing
 		span := opentracing.SpanFromContext(r.Context())
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			span.SetTag("request_id", reqID)
+			span.SetTag("original_service", span.BaggageItem("original_service"))
 			log.Printf("request_id: %s\n", reqID)
 		}
-		
-		span.LogFields(
-			olog.String("event", "notification service: send called"),
-			olog.String("value", "test"),
-		)
 
 		var sendNotificationRequest NotificationRequest
 		err := json.NewDecoder(r.Body).Decode(&sendNotificationRequest)
 		defer r.Body.Close()
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			return 
+			return
 		}
-	
+
+		span.LogFields(
+			olog.String("event", "notification service: send called"),
+			olog.Object("payload", sendNotificationRequest),
+		)
 		log.Printf("request payload: %v+\n", sendNotificationRequest)
 		span.SetTag("email", sendNotificationRequest.Email)
+		w.WriteHeader(http.StatusOK)
 
-		doSomething()
+	}
+}
+
+func NotificationHandlerWithoutTracer(generalConfig *config.GeneralConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("get called with method: %s\n", r.Method)
 
 		w.WriteHeader(http.StatusOK)
 
@@ -98,6 +104,6 @@ func doSomething() {
 	time.Sleep(time.Duration(utils.GetRandomNumber()) * time.Millisecond)
 }
 
-type NotificationRequest struct{
+type NotificationRequest struct {
 	Email string `json:"email,omitempty" validate:"regexp=(^$|^([A-Za-z0-9_\\-.+])+@([A-Za-z0-9_\\-.])+\\.([A-Za-z]{2\\,})$)"`
-} 
+}

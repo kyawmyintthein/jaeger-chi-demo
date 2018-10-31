@@ -39,7 +39,7 @@ func main() {
 		panic(fmt.Errorf("falied to init zipkin tracer : %v", err))
 	}
 
-	router := router.NewRouter(tracer)
+	router := router.NewRouter()
 	router.Get("/users/{user_id}", Get(generalConfig, tracer))
 	logrus.Infoln(fmt.Sprintf("############################## %s Server Started : %s ##############################", generalConfig.LocalService.Name, serverPort))
 
