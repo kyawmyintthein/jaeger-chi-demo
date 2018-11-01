@@ -64,11 +64,10 @@ func getConfig(filepath string) *config.GeneralConfig {
 func NotificationHandler(generalConfig *config.GeneralConfig, tracer opentracing.Tracer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("get called with method: %s\n", r.Method)
-
 		span := opentracing.SpanFromContext(r.Context())
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			span.SetTag("request_id", reqID)
-			span.SetTag("original_service", span.BaggageItem("original_service"))
+			span.SetTag("user_service_request_id", span.BaggageItem("user_service_request_id"))
 			log.Printf("request_id: %s\n", reqID)
 		}
 
@@ -86,17 +85,10 @@ func NotificationHandler(generalConfig *config.GeneralConfig, tracer opentracing
 		)
 		log.Printf("request payload: %v+\n", sendNotificationRequest)
 		span.SetTag("email", sendNotificationRequest.Email)
-		w.WriteHeader(http.StatusOK)
 
-	}
-}
-
-func NotificationHandlerWithoutTracer(generalConfig *config.GeneralConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("get called with method: %s\n", r.Method)
+		doSomething()
 
 		w.WriteHeader(http.StatusOK)
-
 	}
 }
 

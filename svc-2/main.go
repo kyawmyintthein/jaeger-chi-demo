@@ -69,9 +69,9 @@ func RegisterHandler(generalConfig *config.GeneralConfig, tracer opentracing.Tra
 		log.Printf("get called with method: %s\n", r.Method)
 
 		span := opentracing.SpanFromContext(r.Context())
-		fmt.Printf("%+v : \n", span)
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			span.SetTag("request_id", reqID)
+			span.SetBaggageItem("user_service_request_id", reqID)
 			log.Printf("request_id: %s\n", reqID)
 		}
 
@@ -87,14 +87,14 @@ func RegisterHandler(generalConfig *config.GeneralConfig, tracer opentracing.Tra
 			olog.String("event", "user service: register called"),
 			olog.Object("value", userReg),
 		)
-		log.Printf("request payload: %v+\n", userReg)
 		span.SetTag("external_id", userReg.ExternalId)
 		span.SetTag("email", userReg.Email)
 		span.SetTag("device_id", userReg.Device.DeviceId)
 
+		doSomething()
+
 		err = sendNotification(r.Context(), &userReg, generalConfig, tracer)
 		if err != nil {
-			log.Printf("error: %v+", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -120,8 +120,7 @@ func sendNotification(ctx context.Context, payload *UserRegisterRequestModel, ge
 	req = req.WithContext(ctx)
 	req, ht := nethttp.TraceRequest(tracer, req, nethttp.OperationName(fmt.Sprintf("%s:%s", generalConfig.Service3.Name, url)))
 	defer ht.Finish()
-	span := opentracing.SpanFromContext(req.Context())
-	span.SetBaggageItem("original_service", "svc-user-service")
+
 	client := http.Client{Transport: &nethttp.Transport{}}
 	res, err := client.Do(req)
 	if err != nil {
@@ -137,7 +136,7 @@ func sendNotification(ctx context.Context, payload *UserRegisterRequestModel, ge
 		}
 		return errors.New(string(body))
 	}
-	//decoder := json.NewDecoder(res.Body)
+
 	return nil
 }
 
