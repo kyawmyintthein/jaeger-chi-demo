@@ -86,7 +86,7 @@ func NotificationHandler(generalConfig *config.GeneralConfig, tracer opentracing
 		log.Printf("request payload: %v+\n", sendNotificationRequest)
 		span.SetTag("email", sendNotificationRequest.Email)
 
-		doSomething()
+		//doSomething()
 
 		w.WriteHeader(http.StatusOK)
 	}

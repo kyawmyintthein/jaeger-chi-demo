@@ -4,7 +4,7 @@
         "host": "http://localhost", 
         "port": 3033
     },
-    "zipkin":{
+    "jaeger":{
         "endpoint": "http://localhost:9411/api/v2/spans"
     }
 }

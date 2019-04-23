@@ -91,7 +91,7 @@ func RegisterHandler(generalConfig *config.GeneralConfig, tracer opentracing.Tra
 		span.SetTag("email", userReg.Email)
 		span.SetTag("device_id", userReg.Device.DeviceId)
 
-		doSomething()
+		//doSomething()
 
 		err = sendNotification(r.Context(), &userReg, generalConfig, tracer)
 		if err != nil {

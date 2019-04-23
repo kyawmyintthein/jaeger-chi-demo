@@ -1,7 +1,7 @@
 package jaegersvc
 
 import (
-	"log"
+	//"log"
 
 	"github.com/kyawmyintthein/jaeger-chi-demo/config"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -12,9 +12,17 @@ import (
 )
 
 func NewTracer(generalConfig *config.GeneralConfig) (opentracing.Tracer, error) {
-	cfg, err := jconfig.FromEnv()
-	if err != nil {
-		log.Fatal(err)
+	cfg := &jconfig.Configuration{
+		Sampler: &jconfig.SamplerConfig{
+			Type:              "const",
+			Param:             1,
+			SamplingServerURL: "10.30.1.136:5778",
+		},
+		Reporter: &jconfig.ReporterConfig{
+			LogSpans:           true,
+			CollectorEndpoint:  "http://10.30.1.136:14268/api/traces",
+			LocalAgentHostPort: "10.30.1.136:6831",
+		},
 	}
 	cfg.ServiceName = generalConfig.LocalService.Name
 	cfg.Sampler.Type = "const"
